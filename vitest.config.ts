@@ -6,6 +6,8 @@ export default defineConfig({
       "packages/shared",
       "packages/db",
       "packages/adapter-utils",
+      "packages/adapters/claude-local",
+      "packages/adapters/copilot-local",
       "packages/adapters/codex-local",
       "packages/adapters/opencode-local",
       "server",
