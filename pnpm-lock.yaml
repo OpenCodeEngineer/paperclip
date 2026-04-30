@@ -666,6 +666,9 @@ importers:
       '@paperclipai/adapter-codex-local':
         specifier: workspace:*
         version: link:../packages/adapters/codex-local
+      '@paperclipai/adapter-copilot-local':
+        specifier: workspace:*
+        version: link:../packages/adapters/copilot-local
       '@paperclipai/adapter-cursor-local':
         specifier: workspace:*
         version: link:../packages/adapters/cursor-local
