@@ -1,4 +1,5 @@
-import type { AdapterModel, AdapterSessionCodec } from "@paperclipai/adapter-utils";
+import type { AdapterSessionCodec } from "@paperclipai/adapter-utils";
+import { listCopilotModels } from "./models.js";
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -60,12 +61,7 @@ export const sessionCodec: AdapterSessionCodec = {
   },
 };
 
-const STATIC_MODELS: AdapterModel[] = [];
-
-export async function listCopilotModels(): Promise<AdapterModel[]> {
-  return STATIC_MODELS;
-}
-
 export { execute } from "./execute.js";
+export { listCopilotModels };
 export { parseCopilotJsonOutput, isCopilotUnknownSessionError } from "./parse.js";
 export { testEnvironment } from "./test.js";
