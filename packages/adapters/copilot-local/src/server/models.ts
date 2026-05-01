@@ -6,35 +6,14 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import type { AdapterModel } from "@paperclipai/adapter-utils";
 import { ensurePathInEnv, resolveCommandForLogs } from "@paperclipai/adapter-utils/server-utils";
+import { models as staticCopilotModels } from "../index.js";
 
 const execFileAsync = promisify(execFile);
 const MODELS_CACHE_TTL_MS = 1_800 * 1_000;
 const NPM_DISCOVERY_TIMEOUT_MS = 4_000;
 
-const FALLBACK_MODEL_IDS = [
-  "claude-sonnet-4.6",
-  "claude-sonnet-4.5",
-  "claude-haiku-4.5",
-  "claude-opus-4.7",
-  "claude-opus-4.6",
-  "claude-opus-4.6-fast",
-  "claude-opus-4.6-1m",
-  "claude-opus-4.5",
-  "claude-sonnet-4",
-  "gpt-5.4",
-  "gpt-5.5",
-  "gpt-5.3-codex",
-  "gpt-5.2-codex",
-  "gpt-5.2",
-  "gpt-5.1",
-  "gpt-5.4-mini",
-  "gpt-5-mini",
-  "gpt-4.1",
-  "auto",
-] as const;
-
 const FALLBACK_MODELS: AdapterModel[] = sortModels(
-  FALLBACK_MODEL_IDS.map((id) => ({ id, label: labelForModelId(id) })),
+  dedupeModels(staticCopilotModels.map((model) => ({ id: model.id, label: model.label }))),
 );
 
 let discoveryCache: { expiresAt: number; models: AdapterModel[] } | null = null;
@@ -105,6 +84,10 @@ function toModelList(ids: Iterable<string>): AdapterModel[] {
   return sortModels(dedupeModels(parsed));
 }
 
+function mergeWithFallbackModels(models: AdapterModel[]): AdapterModel[] {
+  return sortModels(dedupeModels([...models, ...FALLBACK_MODELS]));
+}
+
 function extractSupportedModelIds(raw: unknown): string[] {
   if (Array.isArray(raw)) {
     return raw.flatMap((entry) => {
@@ -131,7 +114,17 @@ function extractSupportedModelIds(raw: unknown): string[] {
 function extractSupportedModelIdsFromModule(moduleValue: unknown): string[] {
   if (typeof moduleValue !== "object" || moduleValue === null) return [];
   const record = moduleValue as Record<string, unknown>;
-  return extractSupportedModelIds(record.SUPPORTED_MODELS ?? (record.default as Record<string, unknown> | undefined)?.SUPPORTED_MODELS);
+  const defaultRecord =
+    typeof record.default === "object" && record.default !== null
+      ? (record.default as Record<string, unknown>)
+      : null;
+  const root = defaultRecord ?? record;
+  const visible = extractSupportedModelIds(root.HELP_VISIBLE_MODELS ?? record.HELP_VISIBLE_MODELS);
+  const supported = extractSupportedModelIds(root.SUPPORTED_MODELS ?? record.SUPPORTED_MODELS);
+  const hidden = new Set(extractSupportedModelIds(root.HIDDEN_MODELS ?? record.HIDDEN_MODELS));
+  const excluded = new Set(extractSupportedModelIds(root.EXCLUDED_MODELS ?? record.EXCLUDED_MODELS));
+  const selected = visible.length > 0 ? visible : supported;
+  return selected.filter((id) => !hidden.has(id) && !excluded.has(id));
 }
 
 /** Candidate relative paths from a @github/copilot package root to the SDK entry. */
@@ -292,7 +285,7 @@ export async function listCopilotModels(): Promise<AdapterModel[]> {
 
   try {
     const discovered = await discoverSupportedModelsFromSdk();
-    const models = discovered && discovered.length > 0 ? discovered : FALLBACK_MODELS;
+    const models = discovered && discovered.length > 0 ? mergeWithFallbackModels(discovered) : FALLBACK_MODELS;
     discoveryCache = { expiresAt: now + MODELS_CACHE_TTL_MS, models };
     return models;
   } catch {
